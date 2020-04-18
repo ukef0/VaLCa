@@ -15,13 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="valca\cplugin (2).cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="valca\cplugin.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="valca\csaori Old.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="valca\csaori.cpp">
@@ -33,25 +27,10 @@
     <ClCompile Include="valca\csaori_util.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="valca\dllmain.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="valca\main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="valca\mainList.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="valca\openfileMapping.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="valca\pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="valca\valca2new.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="valca\valca2old.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

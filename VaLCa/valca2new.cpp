@@ -901,9 +901,14 @@ void sstpthread() {
                 OnVaLCaLoop();
         }
         if (vlcPlayer::isEnded() && mediaState != newMediaState && !sstpThread::getChangeByMe()) {
-            Sleep(50);
-            if(vlcPlayer::isEnded())
-                OnVaLCaFinish();
+            if(vlcPlayer::mediaDataList.size()==1&& vlcPlayer::playbackMode == libvlc_playback_mode_loop)
+                OnVaLCaLoop();
+            else {
+                Sleep(50);
+                if (vlcPlayer::isEnded())
+                    OnVaLCaFinish();
+            }
+            
         }
             
         mediaID = newMediaID;
