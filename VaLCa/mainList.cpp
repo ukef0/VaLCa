@@ -1,4 +1,6 @@
-﻿#include <windows.h>
+﻿//このファイルは使わないのでプロジェクトから除外すること
+
+#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <future>

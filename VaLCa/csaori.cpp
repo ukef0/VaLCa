@@ -7,10 +7,7 @@
 #endif
 //setlocale end//
 
-
-
 /*
-
  * csaori.cpp
  */
 
@@ -55,8 +52,6 @@ const string_t& CSAORI::s_saori_result(void) const
 	static string_t s = L"Result";
 	return s;
 }
-
-
 
 //CUSTOM_CREATE_INSTANCEを定義すると、CreateInstanceを自前で
 //用意しなければならない代わりに、派生クラスによるデータの整理などを

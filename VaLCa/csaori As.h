@@ -8,10 +8,13 @@
 #pragma once
 
 #include "csaori_base.h"
-
+//typedef std::map<string_t, CGhostInfo> ghost_map_type;
 extern CSAORIBase* pSaori;
 
 class CSAORI : public CSAORIBase {
+protected:
+	void send_sstp(const std::string& str, void* hwnd = NULL);
+	SAORI_FUNC::CCriticalSection sstp_thread_lock;
 public:
 	CSAORI(){}
 	virtual ~CSAORI(){}

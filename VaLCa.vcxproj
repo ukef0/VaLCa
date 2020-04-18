@@ -117,11 +117,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="valca\cplugin.cpp" />
-    <ClCompile Include="valca\csaori.cpp" />
+    <ClCompile Include="VaLCa\csaori.cpp" />
     <ClCompile Include="valca\csaori_base.cpp" />
     <ClCompile Include="valca\csaori_util.cpp" />
     <ClCompile Include="valca\pch.cpp" />
-    <ClCompile Include="valca\valca2new.cpp" />
+    <ClCompile Include="valca\valca.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sdk\include\vlc\deprecated.h" />
@@ -223,7 +223,6 @@
     <ClInclude Include="sdk\include\vlc\plugins\vlc_xml.h" />
     <ClInclude Include="sdk\include\vlc\vlc.h" />
     <ClInclude Include="valca\cplugin.h" />
-    <ClInclude Include="valca\csaori Old.h" />
     <ClInclude Include="valca\csaori.h" />
     <ClInclude Include="valca\csaori_base.h" />
     <ClInclude Include="valca\csaori_util.h" />
