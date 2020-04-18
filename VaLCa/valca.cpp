@@ -25,6 +25,8 @@ typedef SSIZE_T ssize_t;
 std::mutex mtx_;
 std::mutex mtxVLC_;
 std::mutex mtxVLCcommit_;
+std::mutex mtxVLCflg_;
+std::string errorMess=u8"";
 //std::mutex mtx_;
 
 //#define OpenFileMappingW OpenFileMapping
@@ -63,6 +65,9 @@ bool operator <(const mediaData left, const mediaData right) {
     else {
         return compare < 0;
     }
+}
+void tSleep(int x) {
+    std::this_thread::sleep_for(std::chrono::microseconds(x*1000));
 }
 
 std::string toStr(const char* str) {
@@ -103,6 +108,7 @@ public:
     static std::vector<mediaData> mediaDataList;
     vlcPlayer();
     static int getFlug();
+    static void setFlug(int x);
     static bool getMediaDataWithPath(std::filesystem::path path, mediaData& mediaData);
     //static bool albumLoad(std::vector<std::string>& fileNames, std::map<std::string, std::vector<mediaData>>& albumFiles);
     static bool albumLoad(std::vector<std::string>& fileNames, int addFlug);
@@ -112,6 +118,7 @@ public:
     static void loopToggle();
     static void repeatToggle();
     static void setRandomMode(int x);
+    int getRandomMode();
     static void randomToggle();
     static void setMedia();
     static void play();
@@ -181,9 +188,11 @@ int sstpThread::getChangeByMe() {
 
 bool vlcPlayer::isEnded() {
     mtxVLC_.lock();
-    bool cond1=libvlc_Ended == vlcPlayer::getState();
-    bool cond2 = getNowPlayingMediaID()==vlcPlayer::mediaDataList.size()-1;
+    unsigned int x=vlcPlayer::mediaDataList.size();
     mtxVLC_.unlock();
+    bool cond1= libvlc_state_t::libvlc_Ended == vlcPlayer::getState();
+    bool cond2 = getNowPlayingMediaID()==x-1;
+    //
     return cond1 && cond2;
 }
 void vlcPlayer::setCommitting(int x) {
@@ -198,37 +207,57 @@ int vlcPlayer::getCommitting() {
     return x;
 }
 void vlcPlayer::initialize() {
+    mtxVLC_.lock();
     instance = libvlc_new(0, NULL);
     mediaList = libvlc_media_list_new(instance);
     mediaListPlayer = libvlc_media_list_player_new(instance);
-    flug = 0;
+    
+    setFlug(0);
     randomMode = 0;
-    playbackMode = libvlc_playback_mode_default;
+    playbackMode = libvlc_playback_mode_t::libvlc_playback_mode_default;
+    mtxVLC_.unlock();
 }
 void vlcPlayer::loopToggle() {
     //printf("looptoggle\n");
+    mtxVLC_.lock();
     if (playbackMode != libvlc_playback_mode_loop)
         playbackMode = libvlc_playback_mode_loop;
     else
         playbackMode = libvlc_playback_mode_default;
     libvlc_media_list_player_set_playback_mode(mediaListPlayer, playbackMode);
+    mtxVLC_.unlock();
 }
 void vlcPlayer::repeatToggle() {
     //printf("repeattoggle\n");
+    mtxVLC_.lock();
     if (playbackMode != libvlc_playback_mode_repeat)
         playbackMode = libvlc_playback_mode_repeat;
     else
         playbackMode = libvlc_playback_mode_default;
     libvlc_media_list_player_set_playback_mode(mediaListPlayer, playbackMode);
+    mtxVLC_.unlock();
 }
 void vlcPlayer::setRandomMode(int x) {
+    mtxVLC_.lock();
     randomMode = x;
+    mtxVLC_.unlock();
 }
 void vlcPlayer::randomToggle() {
+    mtxVLC_.lock();
     randomMode = 1 - randomMode;
+    mtxVLC_.unlock();
+}
+int vlcPlayer::getRandomMode() {
+    mtxVLC_.lock();
+    int x=randomMode;
+    mtxVLC_.unlock();
+    return x;
 }
 libvlc_state_t vlcPlayer::getState() {
-    return libvlc_media_list_player_get_state(mediaListPlayer);
+    mtxVLC_.lock();
+    libvlc_state_t x=libvlc_media_list_player_get_state(mediaListPlayer);
+    mtxVLC_.unlock();
+    return x;
 }
 void DispStr(const char* name, const char* str) {
     if (str == NULL)
@@ -246,51 +275,71 @@ void vlcPlayer::setMedia() {
         libvlc_media_release(mediaD);
     }
     libvlc_media_list_player_set_media_list(mediaListPlayer, mediaList);
-    flug = 1;
+    setFlug(1);
     mtxVLC_.unlock();
 }
 vlcPlayer::vlcPlayer() {
 }
 int vlcPlayer::getFlug() {
-    return flug;
+    mtxVLCflg_.lock();
+    int x = flug;
+    mtxVLCflg_.unlock();
+    return x;
+}
+void vlcPlayer::setFlug(int x) {
+    mtxVLCflg_.lock();
+    flug = x;
+    mtxVLCflg_.unlock();
 }
 int vlcPlayer::getNowPlayingMediaID() {
-    //mtxVLC_.lock();
+    mtxVLC_.lock();
     libvlc_media_player_t* mediaPlayer = libvlc_media_list_player_get_media_player(mediaListPlayer);
     libvlc_media_t* mediaD = libvlc_media_player_get_media(mediaPlayer);
     int x=libvlc_media_list_index_of_item(mediaList, mediaD);
-    //mtxVLC_.unlock();
+    mtxVLC_.unlock();
     return x;
 }
 mediaData vlcPlayer::getNowPlaying() {
     int mediaID = getNowPlayingMediaID();
     //printf("NowPlaying mediaID:%d", mediaID);
-    return mediaDataList[mediaID];
+    mtxVLC_.lock();
+    mediaData x=mediaDataList[mediaID];
+    mtxVLC_.unlock();
+    return x;
 }
 
 void vlcPlayer::play() {
+    mtxVLC_.lock();
     libvlc_media_list_player_play(mediaListPlayer);
-    Sleep(100);
+    tSleep(100);
     libvlc_media_player_t* mediaPlayerD = libvlc_media_list_player_get_media_player(mediaListPlayer);
     libvlc_media_t* mediaD = libvlc_media_player_get_media(mediaPlayerD);
     const char* nowplaying = libvlc_media_get_meta(mediaD, libvlc_meta_Title);
+    mtxVLC_.unlock();
     //DispStr("nowplaying", nowplaying);
 }
 
 void vlcPlayer::pauseToggle() {
     libvlc_state_t state = getState();
     //printf("state:%d\n", state);
-    if (getFlug() && libvlc_state_t::libvlc_Playing == state) {
+    int flug=getFlug();
+    mtxVLC_.lock();
+    if (flug && libvlc_state_t::libvlc_Playing == state) {
 
         libvlc_media_list_player_pause(mediaListPlayer);
+        mtxVLC_.unlock();
     }
     else {
+        mtxVLC_.unlock();
         vlcPlayer::play();
     }
 }
 int64_t vlcPlayer::getTime() {
+    mtxVLC_.lock();
     libvlc_media_player_t* mediaPlayerD = libvlc_media_list_player_get_media_player(mediaListPlayer);
-    return libvlc_media_player_get_time(mediaPlayerD);
+    int64_t x=libvlc_media_player_get_time(mediaPlayerD);
+    mtxVLC_.unlock();
+    return x;
 }
 bool vlcPlayer::isPlaying() {
     //libvlc_media_list_player_get_media_player();
@@ -299,7 +348,9 @@ bool vlcPlayer::isPlaying() {
 }
 void vlcPlayer::stop() {
     if (getFlug()) {
+        mtxVLC_.lock();
         libvlc_media_list_player_stop(mediaListPlayer);
+        mtxVLC_.unlock();
     }
 }
 void vlcPlayer::release() {
@@ -357,18 +408,25 @@ bool filesInFolder(const char* input_path, std::vector<std::string>& fileNames, 
 
 bool vlcPlayer::next() {
     sstpThread::setChangeByMe(1);
-    return libvlc_media_list_player_next(mediaListPlayer) == 0;
+    mtxVLC_.lock();
+    int x =libvlc_media_list_player_next(mediaListPlayer);
+    mtxVLC_.unlock();
+    return  x== 0;
 }
 bool vlcPlayer::previous() {
     sstpThread::setChangeByMe(1);
-    return libvlc_media_list_player_previous(mediaListPlayer) == 0;
+    mtxVLC_.lock();
+    int x = libvlc_media_list_player_previous(mediaListPlayer);
+    mtxVLC_.unlock();
+    return x == 0;
 }
 
 bool vlcPlayer::getMediaDataWithPath(std::filesystem::path path, mediaData& mediaData) {
     //mediaData mediaData;
+    mtxVLC_.lock();
     libvlc_media_t* mediaD = libvlc_media_new_path(instance, path.u8string().c_str());
     if (libvlc_media_parse_with_options(mediaD, libvlc_media_fetch_local, 1000) == 0) {
-        Sleep(100);
+        tSleep(100);
         mediaData.title = toStr(libvlc_media_get_meta(mediaD, libvlc_meta_Title));
         mediaData.artist = toStr(libvlc_media_get_meta(mediaD, libvlc_meta_Artist));
         mediaData.trackTotal = toInt(libvlc_media_get_meta(mediaD, libvlc_meta_TrackTotal));
@@ -378,26 +436,29 @@ bool vlcPlayer::getMediaDataWithPath(std::filesystem::path path, mediaData& medi
         mediaData.trackNumber = toInt(libvlc_media_get_meta(mediaD, libvlc_meta_TrackNumber));
         mediaData.discNumber = toInt(libvlc_media_get_meta(mediaD, libvlc_meta_DiscNumber));
         mediaData.discTotal = toInt(libvlc_media_get_meta(mediaD, libvlc_meta_DiscTotal));
+        mtxVLC_.unlock();
         return true;
     }
     else {
+        mtxVLC_.unlock();
         return false;
     }
 }
 //bool vlcPlayer::albumLoad(std::vector<std::string> &fileNames, std::map<std::string, std::vector<mediaData>>& albumFiles) {//----------第二
 bool vlcPlayer::albumLoad(std::vector<std::string>& fileNames, int addFlug = 0) {//----------第二
-
+    mtxVLC_.lock();
     //printf("===albumLoad===\n");
     std::vector <libvlc_media_t*> mediaV;
     int k = 0;
     if (fileNames.size() < 1) {
+        mtxVLC_.unlock();
         return false;
     }
     for (unsigned int i = 0;i < fileNames.size();i++) {
         libvlc_media_t* media = libvlc_media_new_path(instance, fileNames[i].c_str());
         mediaV.push_back(media);
 
-        if (libvlc_media_parse_with_options(mediaV.back(), libvlc_media_fetch_local, 1000) != 0) {
+        if (libvlc_media_parse_with_options(mediaV.back(), libvlc_media_fetch_local, 3000) != 0) {
             fileNames.erase(fileNames.begin() + i);
             mediaV.pop_back();
             libvlc_media_release(media);
@@ -406,19 +467,23 @@ bool vlcPlayer::albumLoad(std::vector<std::string>& fileNames, int addFlug = 0) 
         }
         //printf("load%d\n", i);
     }
-    Sleep(120);
+    tSleep(120);
     unsigned int count = 0;
-    if (mediaV.size() < 1) return false;
+    if (mediaV.size() < 1) {
+        mtxVLC_.unlock();
+        return false;
+    }
+        
     while (libvlc_media_get_meta(mediaV[mediaV.size() - 1], libvlc_meta_TrackNumber) == NULL||
-        libvlc_media_get_duration(mediaV[mediaV.size() - 1])==NULL) {
-        //Sleep(120 + 100 * fileNames.size());
-        Sleep(120);
+        libvlc_media_get_duration(mediaV[mediaV.size() - 1])==NULL|| libvlc_media_get_duration(mediaV[mediaV.size() - 1]) <= 1) {
+        //tSleep(120 + 100 * fileNames.size());
+        tSleep(120);
         count++;
-        if (count > fileNames.size() * 2) {
+        if (count > fileNames.size() * 6) {
             break;
         }
     }
-    Sleep(50);
+    tSleep(50);
 
 
     //std::vector <mediaData> meta(mediaV.size());
@@ -443,13 +508,18 @@ bool vlcPlayer::albumLoad(std::vector<std::string>& fileNames, int addFlug = 0) 
         libvlc_media_release(mediaV[i]);
     }
     //sortMediaDataList();
+    mtxVLC_.unlock();
     return true;
+    
 }
 bool loadPath(std::filesystem::path path, int addFlug = 0) {
     bool playFlug = false;
     std::vector<std::string> pathList;
-    if (!exists(path))
+    if (!exists(path)) {
+        errorMess += u8"file not found\n";
         return false;
+    }
+        
     //「予定」ファイルが非存在の時、上位フォルダ内で類似名のファイルを走査
     if (is_directory(path)) {
         std::vector <std::string> fileNames;
@@ -460,12 +530,14 @@ bool loadPath(std::filesystem::path path, int addFlug = 0) {
             playFlug = true;
         }
         else {
+            errorMess += u8"vlc couldn't load directory\nmay be there are n't files?\n";
             return false;
         }
     }
     else {
         mediaData mediaData;
         if (!vlcPlayer::getMediaDataWithPath(path, mediaData)) {
+            errorMess += u8"vlc couldn't load file\nmay be there are n't files?\n";
             return false;
         }
         else {
@@ -480,7 +552,9 @@ bool loadPath(std::filesystem::path path, int addFlug = 0) {
     return true;
 }
 bool vlcPlayer::addMediaInList(std::vector<std::filesystem::path> paths) {
+    mtxVLC_.lock();
     int mediaDataSize = mediaDataList.size();
+    mtxVLC_.unlock();
     int res = 0;
     for (unsigned int i = 0;i < paths.size();i++) {
         if (loadPath(paths[i], 1)) {
@@ -488,12 +562,15 @@ bool vlcPlayer::addMediaInList(std::vector<std::filesystem::path> paths) {
         }
     }
     if (res==1) {
+        
         sortMediaDataList(mediaDataSize, 0);
+        mtxVLC_.lock();
         for (unsigned int i = mediaDataSize;i < mediaDataList.size();i++) {
             libvlc_media_t* mediaD = libvlc_media_new_path(instance, mediaDataList[i].path.c_str());
             libvlc_media_list_add_media(mediaList, mediaD);
             libvlc_media_release(mediaD);
         }
+        mtxVLC_.unlock();
         return true;
     }
     else {
@@ -502,7 +579,7 @@ bool vlcPlayer::addMediaInList(std::vector<std::filesystem::path> paths) {
 
 }
 void vlcPlayer::sortMediaDataList(int start = 0, int end = 0) {
-
+    mtxVLC_.lock();
     if (randomMode == 1) {
         std::mt19937 get_rand_mt((unsigned int)time(NULL));
         std::shuffle(mediaDataList.begin() + start, mediaDataList.end() - end, get_rand_mt);
@@ -511,18 +588,23 @@ void vlcPlayer::sortMediaDataList(int start = 0, int end = 0) {
         std::sort(mediaDataList.begin() + start, mediaDataList.end() - end);
         //printf("===normalsorting===\n");
     }
+    mtxVLC_.unlock();
 }
 void vlcPlayer::setMediaDataList(std::map<std::string, std::vector<mediaData>>& albumFiles) {
+    mtxVLC_.lock();
     for (auto itr = albumFiles.begin(); itr != albumFiles.end(); ++itr) {
         for (unsigned int i = 0;i < itr->second.size();i++) {
             mediaDataList.push_back(itr->second[i]);
         }
     }
+    mtxVLC_.unlock();
 }
 void vlcPlayer::getPathList(std::vector<std::string>& pathList) {
+    mtxVLC_.lock();
     for (unsigned int i = 0;i < mediaDataList.size();i++) {
         pathList.push_back(mediaDataList[i].path);
     }
+    mtxVLC_.unlock();
 }
 
 
@@ -545,7 +627,7 @@ std::string execute(std::vector<std::string>inputs) {
         if (i > 300) {
             return "error:timeout\n";
         }
-        Sleep(10);
+        tSleep(10);
         i++;
     }
     vlcPlayer::setCommitting(1);
@@ -569,11 +651,11 @@ std::string execute(std::vector<std::string>inputs) {
     }
     else if (inputs[0] == u8"previous") {
         vlcPlayer::previous();
-        Sleep(80);
+        tSleep(80);
     }
     else if (inputs[0] == u8"next") {
         vlcPlayer::next();
-        Sleep(80);
+        tSleep(80);
     }
     else if (inputs[0] == u8"add" || (inputs[0] == u8"playOrAdd" && vlcPlayer::getFlug())) {
         std::vector<std::filesystem::path> paths;
@@ -581,10 +663,10 @@ std::string execute(std::vector<std::string>inputs) {
             paths.push_back(std::filesystem::u8path(inputs[1].c_str()));
         }
         vlcPlayer::addMediaInList(paths);
-        Sleep(80);
+        tSleep(80);
     }
     else if (inputs[0] == u8"now") {
-        Sleep(80);
+        tSleep(80);
     }
     else if (inputs[0] == u8"load") {
         vlcPlayer::setCommitting(0);
@@ -600,7 +682,7 @@ std::string execute(std::vector<std::string>inputs) {
             if (inputs[0] == u8"play2") mode = 1;
             inputs.erase(inputs.begin(), inputs.begin() + 1);
         }
-        bool ended = vlcPlayer::getState() == libvlc_Ended && vlcPlayer::getNowPlayingMediaID() + 1 == vlcPlayer::mediaDataList.size();
+        bool ended = vlcPlayer::getState() == libvlc_state_t::libvlc_Ended && vlcPlayer::getNowPlayingMediaID() + 1 == vlcPlayer::mediaDataList.size();
         if (vlcPlayer::getFlug() == 0 || mode == 0 || ended) {
             using namespace std::filesystem;
             std::vector<path> paths;
@@ -635,13 +717,13 @@ std::string execute(std::vector<std::string>inputs) {
     std::string output;
     libvlc_state_t playerState = vlcPlayer::getState();
     if (playerState == NULL) {
-        playerState = libvlc_Error;
+        playerState = libvlc_state_t::libvlc_Error;
     }
     //printf("---OUTPUT----\n");
     output = status + u8"\n";
     if (vlcPlayer::getFlug()) {
         output += std::to_string(playerState) + u8"\n";
-        bool x = playerState == libvlc_Opening || playerState == libvlc_Playing || playerState == libvlc_Paused;
+        bool x = playerState == libvlc_state_t::libvlc_Opening || playerState == libvlc_state_t::libvlc_Playing || playerState == libvlc_state_t::libvlc_Paused;
         mediaData mediaData = vlcPlayer::getNowPlaying();
         output += mediaData.title + u8"\n";
         output += mediaData.albumName + u8"\n";
@@ -656,12 +738,14 @@ std::string execute(std::vector<std::string>inputs) {
         output += std::to_string(vlcPlayer::getNowPlayingMediaID()) + u8"\n";
         output += std::to_string(vlcPlayer::mediaDataList.size()) + u8"\n";
         output += std::to_string(vlcPlayer::playbackMode) + u8"\n";
+        output += u8"\nstatus\n";
         //string_t lpname=;
 
         
         
     }else {
-        output += u8"No Media";
+        output += u8"error:\n";
+        output += errorMess;
     }
     vlcPlayer::setCommitting(0);
     return output;
@@ -806,23 +890,28 @@ bool send_sstp(const std::string& str, void* hwnd)
     }
 }
 void sstpNotify(std::string event,std::vector<std::string> references) {
-    const int sharedMemSize = 1024 * 64;
+    const int sharedMemSize = 1024 *64;
     //std::string sjSakura = SAORI_FUNC::UnicodeToMultiByte(L"Sakura", CP_SJIS);
     HANDLE hFM = OpenFileMappingA(FILE_MAP_READ, FALSE, "Sakura");
     //LPWSTR lpStr = (LPWSTR)MapViewOfFile(hFM, FILE_MAP_READ, 0, 0, 0);
-    BYTE* lpStr = (BYTE*)MapViewOfFile(hFM, FILE_MAP_READ, 0, 0, sharedMemSize);
+    BYTE* lpStr =new BYTE[sharedMemSize];
+    lpStr = (BYTE*)MapViewOfFile(hFM, FILE_MAP_READ, 0, 0, sharedMemSize);
     long length;
     memcpy(&length, lpStr, 4);
-    char l[sharedMemSize - 4];
+    char* l = new char[sharedMemSize - 4];
+    //char l[sharedMemSize - 4];
     memcpy(l, lpStr + 4, length - 4);
-
+    
     //char lpStrC[1000];
     //sprintf(lpStrC,"%c%c%c%c", b1, b2, b3, b4);
     if (hFM == NULL || lpStr == NULL) {
         //output += u8"lpstr:loadError\n";
-    }
 
+
+    }
     else {
+        
+
         //std::string strLpStr = lpStr;
         string_t rq = SAORI_FUNC::MultiByteToUnicode(l, CP_SJIS);
         std::string u8LpStr = SAORI_FUNC::UnicodeToMultiByte(rq, SAORI_FUNC::StringtoCodePage("utf-8"));
@@ -850,7 +939,7 @@ void sstpNotify(std::string event,std::vector<std::string> references) {
         sstpStr += u8"Sender: VaLCa\n";
         sstpStr += u8"Event: "+event+u8"\n";
         for (unsigned int i = 0;i < references.size();i++) {
-            sstpStr += u8"Reference"+std::to_string(0)+u8":"+ references[i]+u8"\n";
+            sstpStr += u8"Reference"+std::to_string(i)+u8": "+ references[i]+u8"\n";
         }
         //sstpStr += u8"Reference0: テストです\n";
         //sstpStr += u8"Reference1: テストですよ\n";
@@ -870,12 +959,18 @@ void sstpNotify(std::string event,std::vector<std::string> references) {
     }
 
     CloseHandle(hFM);
+    //delete[]lpStr;
+    delete[]l;
 
 }
 
 void OnVaLCaPass() {
     std::vector<std::string> references;
     sstpNotify(u8"OnVaLCaPass",references);
+}
+void OnVaLCaTest() {
+    std::vector<std::string> references;
+    sstpNotify(u8"OnVaLCaTest", references);
 }
 void OnVaLCaLoop() {
     std::vector<std::string> references;
@@ -890,7 +985,7 @@ void sstpthread() {
     int mediaState = 0;
     while (sstpThread::getState()) {
         while (vlcPlayer::getCommitting() == 1) {
-            Sleep(50);
+            tSleep(50);
         }
         int newMediaID=vlcPlayer::getNowPlayingMediaID();
         int newMediaState = vlcPlayer::getState();
@@ -904,7 +999,7 @@ void sstpthread() {
             if(vlcPlayer::mediaDataList.size()==1&& vlcPlayer::playbackMode == libvlc_playback_mode_loop)
                 OnVaLCaLoop();
             else {
-                Sleep(50);
+                tSleep(50);
                 if (vlcPlayer::isEnded())
                     OnVaLCaFinish();
             }
@@ -913,23 +1008,46 @@ void sstpthread() {
             
         mediaID = newMediaID;
         mediaState = newMediaState;
-        Sleep(100);
+        tSleep(100);
         sstpThread::setChangeByMe(0);
         //sstptest();
     }
+}
+void testthread() {
+    tSleep(10000);
+    //tSleep(300);
+    std::vector<std::string> inputs;
+    //inputs.push_back(u8"play");
+    //inputs.push_back(u8"sample.m4a");
+    inputs.push_back(u8"sample.m4a");
+    std::string op=execute(inputs);
+    
+    //ee
+    std::vector<std::string> references;
+    references.push_back(op);
+    references.push_back(errorMess);
+    sstpNotify(u8"OnVaLCaTest", references);
+    
+    while(sstpThread::getState())
+        tSleep(100);
 }
 bool loadex() {
     vlcPlayer::setCommitting(1);
     //playerインスタンスの作成
     vlcPlayer::initialize();
+    vlcPlayer::setCommitting(0);
+    sstpThread::setState(1);
+    //std::thread testThread(testthread);
+    //testThread.detach();
+
     std::thread sstpThread(sstpthread);
     sstpThread.detach();
-    vlcPlayer::setCommitting(0);
+    
     return true;
 }
 bool unloadex() {
     sstpThread::setState(0);
-    Sleep(100);
+    tSleep(100);
     if (vlcPlayer::isPlaying())
         vlcPlayer::stop();
     vlcPlayer::release();
@@ -1058,7 +1176,7 @@ int main()
         keyCopy(key, newKey);
         std::vector<string_t> in;
         while (1) {
-            Sleep(10);
+            tSleep(10);
             keyVerify(newKey);
             for (int i = 0;i < NUM_KEY;i++) {
                 if (newKey[i] && newKey[i] != key[i]) {
