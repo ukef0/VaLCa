@@ -1007,9 +1007,9 @@ void nextHundler(const libvlc_event_t* event, void* param) {
     return;
 }
 void playedHundler(const libvlc_event_t * event, void* param) {
-    //mtxVLC_.lock();
-    //vlcPlayer::played = 0;
-    //mtxVLC_.unlock();
+    mtxVLC_.lock();
+    vlcPlayer::played = 0;
+    mtxVLC_.unlock();
     OnVaLCaFinish();
 }
 void testthread() {
