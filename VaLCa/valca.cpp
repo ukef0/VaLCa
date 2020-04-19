@@ -338,7 +338,8 @@ mediaData vlcPlayer::getNowPlaying() {
 }
 
 void vlcPlayer::play() {
-    
+    mtxVLC_.lock();
+    libvlc_media_list_player_play(mediaListPlayer);
     /*tSleep(100);
     libvlc_media_player_t* mediaPlayerD = libvlc_media_list_player_get_media_player(mediaListPlayer);
     libvlc_media_t* mediaD = libvlc_media_player_get_media(mediaPlayerD);
