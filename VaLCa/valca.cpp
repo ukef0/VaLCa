@@ -98,13 +98,14 @@ private:
     //static libvlc_media_t* media;
     //static libvlc_media_player_t* media_player;
     static int flug;
+    
     static libvlc_media_list_t* mediaList;
     static libvlc_media_list_player_t* mediaListPlayer;
     static int committing;
     static libvlc_event_manager_t* eventManager;
-    static libvlc_event_manager_t* eventManager2;
     static libvlc_playback_mode_t playbackMode;
 public:
+    static int played;
     static void setCommitting(int x);
     static int getCommitting();
     
@@ -143,6 +144,7 @@ public:
     static bool addMediaInList(std::vector<std::filesystem::path> paths);
 };
 libvlc_instance_t* vlcPlayer::instance;
+int vlcPlayer::played;
 int  vlcPlayer::playable;
 int  vlcPlayer::committing;
 std::vector<mediaData>  vlcPlayer::mediaDataList;
@@ -154,7 +156,6 @@ int vlcPlayer::randomMode;
 libvlc_media_list_t* vlcPlayer::mediaList;
 libvlc_playback_mode_t vlcPlayer::playbackMode;
 libvlc_event_manager_t* vlcPlayer::eventManager;
-libvlc_event_manager_t* vlcPlayer::eventManager2;
 void endHundler(const libvlc_event_t* event, void* param);
 void playedHundler(const libvlc_event_t* event, void* param);
 void nextHundler(const libvlc_event_t* event, void* param);
@@ -219,6 +220,7 @@ int vlcPlayer::getCommitting() {
 
 void vlcPlayer::initialize() {
     mtxVLC_.lock();
+    played = 0;
     instance = libvlc_new(0, NULL);
     mediaList = libvlc_media_list_new(instance);
     mediaListPlayer = libvlc_media_list_player_new(instance);
@@ -336,8 +338,7 @@ mediaData vlcPlayer::getNowPlaying() {
 }
 
 void vlcPlayer::play() {
-    mtxVLC_.lock();
-    libvlc_media_list_player_play(mediaListPlayer);
+    
     /*tSleep(100);
     libvlc_media_player_t* mediaPlayerD = libvlc_media_list_player_get_media_player(mediaListPlayer);
     libvlc_media_t* mediaD = libvlc_media_player_get_media(mediaPlayerD);
@@ -924,6 +925,10 @@ void sstpNotify(std::string event,std::vector<std::string> references) {
 
 }
 
+void OnVaLCaSSTP(std::string command) {
+    std::vector<std::string> references;
+    sstpNotify(command, references);
+}
 void OnVaLCaPass() {
     std::vector<std::string> references;
     sstpNotify(u8"OnVaLCaPass",references);
@@ -975,55 +980,36 @@ void sstpthread() {
 }
 void endHundler(const libvlc_event_t* event, void* param) {
     OnVaLCaTest();
-    /*int newMediaID = vlcPlayer::getNowPlayingMediaID();
-    mtxVLC_.lock();
-    int mediaDataSize = vlcPlayer::mediaDataList.size();
-    mtxVLC_.unlock();
-    if(newMediaID==)*/
 }
 void nextFunc() {
-    /*libvlc_playback_mode_t mode = vlcPlayer::getPlaybackMode();
-
+    libvlc_playback_mode_t mode = vlcPlayer::getPlaybackMode();
+    mtxVLC_.lock();
+    int x = vlcPlayer::played;
+    vlcPlayer::played = 1;
+    mtxVLC_.unlock();
     int mediaID = vlcPlayer::getNowPlayingMediaID();
-    int mediaDataSize = vlcPlayer::mediaDataList.size();
     if (mode == libvlc_playback_mode_repeat) {
-        OnVaLCaLoop();
-    }
-    else if (mediaDataSize == mediaID + 1) {
-        OnVaLCaLoop();
+        OnVaLCaSSTP(u8"OnVaLCaRepeat");
     }
     else if (mediaID == 0) {
-        OnVaLCaTest();
-    }
-    else {
+        if (x == 1)
+            OnVaLCaLoop();
+        
+    }else {
         OnVaLCaPass();
-    }*/
+    }
 }
 void nextHundler(const libvlc_event_t* event, void* param) {
     int* size=(int*)param;
-    int x=vlcPlayer::getNowPlayingMediaID();
-    if (x > 0) {
-        OnVaLCaPass();
-    }
-    else {
-        OnVaLCaLoop();
-    }
-    //OnVaLCaTest();
-    
-    //nextFunc();
-    //if (0) {
-    
-    
-    //}
+    std::thread nextThread(nextFunc);
+    nextThread.detach();
     return;
 }
 void playedHundler(const libvlc_event_t * event, void* param) {
-    /*libvlc_playback_mode_t mode=vlcPlayer::getPlaybackMode();
-    if(mode==libvlc_playback_mode_loop|| mode == libvlc_playback_mode_repeat){
-        OnVaLCaLoop();
-    }else if(mode == libvlc_playback_mode_default) {*/
-        OnVaLCaFinish();
-    //}
+    //mtxVLC_.lock();
+    //vlcPlayer::played = 0;
+    //mtxVLC_.unlock();
+    OnVaLCaFinish();
 }
 void testthread() {
     tSleep(10000);
