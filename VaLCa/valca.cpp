@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <future>
 #include <string>
+#include <fstream>
+#include <iostream>
 typedef SSIZE_T ssize_t;
 #include <map>
 #include <vlc/vlc.h>
@@ -22,6 +24,7 @@ typedef SSIZE_T ssize_t;
 #include <windows.h>
 #include <mutex>
 #define NUM_KEY 8
+#define MY_MAX_PATH 1000
 std::mutex mtx_;
 std::mutex mtxVLC_;
 std::mutex mtxVLCcommit_;
@@ -40,6 +43,11 @@ struct testOutput {
 };*/
 std::string getHwnd(std::string fmo);
 bool send_sstp(const std::string& str, void* hwnd);
+void sstpNotify(std::string event, std::vector<std::string> references);
+//void testsstp(std::vector<std::string> references);
+void testsstp(std::string reference);
+std::vector<std::string> loadExList();
+std::filesystem::path getDllPath();
 struct mediaData {
     std::string path;
     std::string albumName;
@@ -91,49 +99,66 @@ class vlcPlayer {
 private:
 
     static libvlc_instance_t* instance;
-    static int randomMode;
-    static int flug;
+    static int randomMode;//------------1だと、再生リスト作成時に、ランダムソートをする。追加曲は追加部分のみランダムソート。
+    static int flug;//------------------初期に1で、初回の楽曲再生で1になる。
     
-    static libvlc_media_list_t* mediaList;
+    static libvlc_media_list_t* mediaList;//------vlc本体のプレイリスト
     static libvlc_media_list_player_t* mediaListPlayer;
-    static int committing;
+    static int committing;//------------execによる処理が行われている間1、行動の重複を防ぐ。
     static libvlc_event_manager_t* eventManager;
-    static libvlc_playback_mode_t playbackMode;
+    static libvlc_playback_mode_t playbackMode;//---------ループ再生、リピート再生か、デフォルト再生か
+
 public:
-    static int played;
-    static std::vector<mediaData> mediaDataList;
+    vlcPlayer();
+    static int extensionMode;//--------------1なら拡張子を監視して再生するか区別。0だと全部再生しようとする。
+    static std::vector<std::string> extensionList;//-------対応拡張子のリスト
+    static int played;//---------------1で最初の曲を再生するとOnLoopイベント。再生ボタンによる再生で0にされる。
+    static std::vector<mediaData> mediaDataList;//-----------プレイリスト中の曲データの配列
+
+
     static void setCommitting(int x);
     static int getCommitting();
-    
-    vlcPlayer();
+
     static int getFlug();
     static void setFlug(int x);
+    
+    static void initialize();
+    static void release();
+
+    static void loopToggle();
+    static void repeatToggle();
+
+    static void setRandomMode(int x);
+    static int getRandomMode();
+    static void randomToggle();
+    static void setPlaybackMode(libvlc_playback_mode_t x);
+    static libvlc_playback_mode_t getPlaybackMode();
+    
+    static void setMedia();
     static bool getMediaDataWithPath(std::filesystem::path path, mediaData& mediaData);
     //static bool albumLoad(std::vector<std::string>& fileNames, std::map<std::string, std::vector<mediaData>>& albumFiles);
     static bool albumLoad(std::vector<std::string>& fileNames, int addFlug);
+    static void setMediaDataList(std::map<std::string, std::vector<mediaData>>& albumFiles);
     static void sortMediaDataList(int start, int end);
-    static int64_t getTime();
-    static void initialize();
-    static void loopToggle();
-    static void repeatToggle();
-    static void setRandomMode(int x);
-    static int getRandomMode();
-    static void setPlaybackMode(libvlc_playback_mode_t x);
-    static libvlc_playback_mode_t getPlaybackMode();
-    static void randomToggle();
-    static void setMedia();
-    static void play();
+    static void getPathList(std::vector<std::string>& pathList);
+
     static bool isPlaying();
     static bool isEnded();
+    
+    
+    
+    
+    static void play();
     static void stop();
-    static void release();
-    static void setMediaDataList(std::map<std::string, std::vector<mediaData>>& albumFiles);
-    static mediaData getNowPlaying();
-    static void getPathList(std::vector<std::string>& pathList);
     static void pauseToggle();
-    static libvlc_state_t getState();
     static bool next();
     static bool previous();
+    static bool playItemAtIndex(int id);
+
+    static int64_t getTime();
+    static libvlc_state_t getState();
+
+    static mediaData getNowPlaying();
     static int getNowPlayingMediaID();
     static bool addMediaInList(std::vector<std::filesystem::path> paths);
 };
@@ -147,6 +172,8 @@ int vlcPlayer::randomMode;
 libvlc_media_list_t* vlcPlayer::mediaList;
 libvlc_playback_mode_t vlcPlayer::playbackMode;
 libvlc_event_manager_t* vlcPlayer::eventManager;
+int vlcPlayer::extensionMode;
+std::vector<std::string> vlcPlayer::extensionList;
 void endHundler(const libvlc_event_t* event, void* param);
 void playedHundler(const libvlc_event_t* event, void* param);
 void nextHundler(const libvlc_event_t* event, void* param);
@@ -212,7 +239,14 @@ int vlcPlayer::getCommitting() {
 }
 
 void vlcPlayer::initialize() {
+    std::vector<std::string> exList = {".mp3",".m4a",".wav",".ogg",".flac",".alac",".wma",".aac",".gsm",".au",".aif"};
+    std::vector<std::string> exLoaded =loadExList();
+    if (exLoaded.size() > 0) {
+        exList = exLoaded;
+    }
     mtxVLC_.lock();
+    extensionMode = 1;
+    extensionList = exList;
     played = 0;
     instance = libvlc_new(0, NULL);
     mediaList = libvlc_media_list_new(instance);
@@ -221,6 +255,7 @@ void vlcPlayer::initialize() {
     setFlug(0);
     setRandomMode(0);
     setPlaybackMode(libvlc_playback_mode_default);
+
     mtxVLC_.lock();
     eventManager=libvlc_media_list_player_event_manager(mediaListPlayer);
     libvlc_event_attach(eventManager, libvlc_MediaListPlayerPlayed, playedHundler, NULL);
@@ -374,6 +409,19 @@ void vlcPlayer::stop() {
         mtxVLC_.unlock();
     }
 }
+bool vlcPlayer::playItemAtIndex(int id) {
+    bool res=false;
+    if (getFlug()) {
+        mtxVLC_.lock();
+        if (id < (signed) mediaDataList.size()) {
+            played = 0;
+            if (libvlc_media_list_player_play_item_at_index(mediaListPlayer, id) == 0)
+                res = true;
+        }
+        mtxVLC_.unlock();
+    }
+    return res;
+}
 void vlcPlayer::release() {
     mtxVLC_.lock();
     libvlc_event_detach(eventManager, libvlc_MediaListPlayerPlayed, playedHundler, NULL);
@@ -440,6 +488,7 @@ bool vlcPlayer::next() {
 bool vlcPlayer::previous() {
     //sstpThread::setChangeByMe(1);
     mtxVLC_.lock();
+    played = 0;
     int x = libvlc_media_list_player_previous(mediaListPlayer);
     mtxVLC_.unlock();
     return x == 0;
@@ -447,10 +496,20 @@ bool vlcPlayer::previous() {
 
 bool vlcPlayer::getMediaDataWithPath(std::filesystem::path path, mediaData& mediaData) {
     //mediaData mediaData;
-    //mtxVLC_.lock();
+    mtxVLC_.lock();
+    std::string extension = path.extension().u8string();
+    std::transform(extension.cbegin(), extension.cend(), extension.begin(), tolower);
+    bool extensionFound = std::find(extensionList.begin(), extensionList.end(), extension) != extensionList.end();
+    if (extensionMode && !extensionFound) {
+        mtxVLC_.unlock();
+        return false;
+
+    }
+    
     libvlc_media_t* mediaD = libvlc_media_new_path(instance, path.u8string().c_str());
     if (libvlc_media_parse_with_options(mediaD, libvlc_media_fetch_local, 1000) == 0) {
-        tSleep(100);
+        while(!libvlc_media_is_parsed(mediaD))
+            tSleep(100);
         mediaData.title = toStr(libvlc_media_get_meta(mediaD, libvlc_meta_Title));
         mediaData.artist = toStr(libvlc_media_get_meta(mediaD, libvlc_meta_Artist));
         mediaData.trackTotal = toInt(libvlc_media_get_meta(mediaD, libvlc_meta_TrackTotal));
@@ -460,11 +519,11 @@ bool vlcPlayer::getMediaDataWithPath(std::filesystem::path path, mediaData& medi
         mediaData.trackNumber = toInt(libvlc_media_get_meta(mediaD, libvlc_meta_TrackNumber));
         mediaData.discNumber = toInt(libvlc_media_get_meta(mediaD, libvlc_meta_DiscNumber));
         mediaData.discTotal = toInt(libvlc_media_get_meta(mediaD, libvlc_meta_DiscTotal));
-        //mtxVLC_.unlock();
+        mtxVLC_.unlock();
         return true;
     }
     else {
-        //mtxVLC_.unlock();
+        mtxVLC_.unlock();
         return false;
     }
 }
@@ -478,8 +537,18 @@ bool vlcPlayer::albumLoad(std::vector<std::string>& fileNames, int addFlug = 0) 
         //mtxVLC_.unlock();
         return false;
     }
-    //mtxVLC_.lock();
-    for (unsigned int i = 0;i < fileNames.size();i++) {
+    mtxVLC_.lock();
+    for ( int i = 0;i < (signed)fileNames.size();i++) {
+        std::filesystem::path fpath= std::filesystem::u8path(fileNames[i].c_str());
+        std::string extension =fpath.extension().u8string();
+        std::transform(extension.cbegin(),extension.cend(), extension.begin(), tolower);
+        bool extensionFound=std::find(extensionList.begin(), extensionList.end(), extension) != extensionList.end();
+        if (extensionMode&&!extensionFound) {
+           
+            fileNames.erase(fileNames.begin() + i);
+            i--;
+            continue;
+        }
         libvlc_media_t* media = libvlc_media_new_path(instance, fileNames[i].c_str());
         mediaV.push_back(media);
 
@@ -492,30 +561,44 @@ bool vlcPlayer::albumLoad(std::vector<std::string>& fileNames, int addFlug = 0) 
         }
         //printf("load%d\n", i);
     }
-    //mtxVLC_.unlock();
+    
     tSleep(120);
     unsigned int count = 0;
     if (mediaV.size() < 1) {
-       
+        mtxVLC_.unlock();
         return false;
     }
         
-    while (libvlc_media_get_meta(mediaV[mediaV.size() - 1], libvlc_meta_TrackNumber) == NULL||
-        libvlc_media_get_duration(mediaV[mediaV.size() - 1])==NULL|| libvlc_media_get_duration(mediaV[mediaV.size() - 1]) <= 1) {
+    while (!libvlc_media_is_parsed(mediaV[mediaV.size() - 1])|| libvlc_media_get_duration(mediaV[mediaV.size() - 1]) <= 10) {
         tSleep(80);
         count++;
-        if (count > fileNames.size() * 6) {
+        if (count > mediaV.size() * 10) {
+            
             break;
         }
     }
-    tSleep(50);
-
-    mtxVLC_.lock();
-    int n = -1;
+    tSleep(80);
+    //int n = -1;
+    for ( int i = 0;i < (signed)mediaV.size();i++) {
+        if (libvlc_media_get_duration(mediaV[i]) == NULL || libvlc_media_get_duration(mediaV[i]) < 10) {
+            //mtxVLC_.unlock();
+            std::string mess=(u8"erase"+std::to_string(i));
+            //std::thread sstpThread(testsstp,mess);
+            //sstpThread.detach();
+            //mtxVLC_.lock();
+            mediaV.erase(mediaV.begin() + i);
+            i--;
+        }
+    }
+    if (mediaV.size() < 1) {
+        mtxVLC_.unlock();
+        return false;
+    }
+    //mtxVLC_.lock();
     if (addFlug == 0) {
         mediaDataList.clear();
     }
-
+   
     for (unsigned int i = 0;i < mediaV.size();i++) {
         mediaData mD;
         mD.title = toStr(libvlc_media_get_meta(mediaV[i], libvlc_meta_Title));
@@ -558,7 +641,7 @@ bool loadPath(std::filesystem::path path, int addFlug = 0) {
     else {
         mediaData mediaData;
         if (!vlcPlayer::getMediaDataWithPath(path, mediaData)) {
-            errorMess += u8"vlc couldn't load file\nmay be there are n't files?\n";
+            errorMess += u8"vlc couldn't load the file\n";
             return false;
         }
         else {
@@ -637,7 +720,31 @@ void DispTitleList() {
         printf("%d-%d:%s\n", mediaData.discNumber, mediaData.trackNumber, mediaData.title.c_str());
     }
 }
+std::string mediaDataStr(mediaData mediaData) {
+    std::string output="";
+    output += mediaData.title + u8"\n";
+    output += mediaData.albumName + u8"\n";
+    output += mediaData.artist + u8"\n";
+    output += mediaData.path + u8"\n";
+    output += std::to_string(mediaData.trackNumber) + u8"\n";
+    output += std::to_string(mediaData.trackTotal) + u8"\n";
+    output += std::to_string(mediaData.discNumber) + u8"\n";
+    output += std::to_string(mediaData.discTotal) + u8"\n";
+    output += timeStr(mediaData.length) + u8"\n";
 
+
+    return output;
+}
+std::string playerDataStr() {
+    std::string output="";
+    output += std::to_string(vlcPlayer::getState()) + u8"\n";
+    output += timeStr(vlcPlayer::getTime()) + u8"\n";
+    output += std::to_string(vlcPlayer::getNowPlayingMediaID()) + u8"\n";
+    output += std::to_string(vlcPlayer::mediaDataList.size()) + u8"\n";
+    output += std::to_string(vlcPlayer::getPlaybackMode()) + u8"\n";
+
+    return output;
+}
 
 
 std::string execute(std::vector<std::string>inputs) {
@@ -674,22 +781,42 @@ std::string execute(std::vector<std::string>inputs) {
     }
     else if (inputs[0] == u8"previous") {
         vlcPlayer::previous();
-        tSleep(80);
     }
     else if (inputs[0] == u8"next") {
         vlcPlayer::next();
-        tSleep(80);
+    }
+    else if (inputs[0] == u8"playItemAtIndex") {
+        if (!vlcPlayer::playItemAtIndex(stoi(inputs[1]))) {
+            status = "error";
+        }
     }
     else if (inputs[0] == u8"add" || (inputs[0] == u8"playOrAdd" && vlcPlayer::getFlug())) {
         std::vector<std::filesystem::path> paths;
         for (unsigned int i = 1;i < inputs.size();i++) {
             paths.push_back(std::filesystem::u8path(inputs[1].c_str()));
         }
-        vlcPlayer::addMediaInList(paths);
-        tSleep(80);
+        if (!vlcPlayer::addMediaInList(paths))
+            status = u8"error:couldn't load any file.";
     }
     else if (inputs[0] == u8"now") {
-        tSleep(80);
+        tSleep(1);
+    }
+    else if (inputs[0] == u8"extensionMode") {
+        if (inputs.size() < 1 || inputs[1] == u8"0")
+            vlcPlayer::extensionMode = 0;
+        else if (inputs[1] == u8"1")
+            vlcPlayer::extensionMode = 1;
+        else status = "error:input value incorrect!";
+        return status;
+    }
+    else if (inputs[0] == u8"information") {
+        std::string output = status + u8"\n";
+        output += playerDataStr() + u8"\n";
+        for (unsigned int i = 0;i < vlcPlayer::mediaDataList.size();i++) {
+            mediaData mediaData = vlcPlayer::mediaDataList[i];
+            output += mediaDataStr(mediaData)+u8"\n";
+        }
+        return output;
     }
     else if (inputs[0] == u8"load") {
         vlcPlayer::setCommitting(0);
@@ -746,25 +873,13 @@ std::string execute(std::vector<std::string>inputs) {
     output = status + u8"\n";
     if (vlcPlayer::getFlug()){
         
-        output += std::to_string(playerState) + u8"\n";
-        bool x = playerState == libvlc_state_t::libvlc_Opening || playerState == libvlc_state_t::libvlc_Playing || playerState == libvlc_state_t::libvlc_Paused;
+        //output += std::to_string(playerState) + u8"\n";
+        //bool x = playerState == libvlc_state_t::libvlc_Opening || playerState == libvlc_state_t::libvlc_Playing || playerState == libvlc_state_t::libvlc_Paused;
         mediaData mediaData = vlcPlayer::getNowPlaying();
-        output += mediaData.title + u8"\n";
-        output += mediaData.albumName + u8"\n";
-        output += mediaData.artist + u8"\n";
-        output += mediaData.path + u8"\n";
-        output += std::to_string(mediaData.trackNumber) + u8"\n";
-        output += std::to_string(mediaData.trackTotal) + u8"\n";
-        output += std::to_string(mediaData.discNumber) + u8"\n";
-        output += std::to_string(mediaData.discTotal) + u8"\n";
-        output += timeStr(mediaData.length) + u8"\n";
+        output += playerDataStr()+u8"\n";
 
-        output += timeStr(vlcPlayer::getTime()) + u8"\n";
-        
-        output += std::to_string(vlcPlayer::getNowPlayingMediaID()) + u8"\n";
-        output += std::to_string(vlcPlayer::mediaDataList.size()) + u8"\n";
-        output += std::to_string(vlcPlayer::getPlaybackMode()) + u8"\n";
-        output += u8"\nstatus\n";
+        output += mediaDataStr(mediaData);
+        //output += u8"\nstatus\n";
         //string_t lpname=;
         
         
@@ -777,7 +892,7 @@ std::string execute(std::vector<std::string>inputs) {
 }
 
 std::string myGetCurrentDirectry() {
-    const int max_path = 1000;
+    const int max_path = MY_MAX_PATH;
     char buf[max_path];
     GetCurrentDirectoryA(max_path, buf);
     string_t rq = SAORI_FUNC::MultiByteToUnicode(buf, CP_SJIS);
@@ -910,7 +1025,15 @@ void sstpNotify(std::string event,std::vector<std::string> references) {
     delete[]l;
 
 }
-
+/*void testsstp(std::vector<std::string> ref) {
+    tSleep(1000);
+    sstpNotify("OnVaLCaTest", ref);
+}*/
+void testsstp(std::string ref) {
+    std::vector<std::string>refs = { ref };
+    tSleep(1000);
+    sstpNotify("OnVaLCaTest", refs);
+}
 void OnVaLCaSSTP(std::string command) {
     std::vector<std::string> references;
     sstpNotify(command, references);
@@ -931,6 +1054,7 @@ void OnVaLCaFinish() {
     std::vector<std::string> references;
     sstpNotify(u8"OnVaLCaFinish", references);
 }
+
 /*
 //sstpThread
 void sstpthread() {
@@ -1022,6 +1146,58 @@ void testthread() {
     while(sstpThread::getState())
         tSleep(100);
 }*/
+std::vector<std::string>loadExList() {
+    namespace fs = std::filesystem;
+    //fs::path path = u8"VaLCaConfig.txt";
+    fs::path path=getDllPath();
+    path.replace_filename(u8"VaLCaConfig.txt");
+    testsstp(path.u8string());
+    std::vector<std::string> exts;
+    std::string line;
+    std::regex reExt(R"(\.\w+)");
+    std::regex reSpace(R"(\s)");
+    std::regex reExtMode(R"(extension:)");
+    //std::regex reVideo("R(video:)");
+    int readMode = 0;
+    if (is_regular_file(path)) {
+        std::ifstream ifs(path);
+        if (!ifs.fail()) {
+            while (std::getline(ifs, line)){
+                line = std::regex_replace(line, reSpace, "");
+                if (std::regex_match(line, reExtMode)) {
+                    readMode = 1;
+                }
+                if ((readMode == 1|| readMode == 0)&& std::regex_match(line, reExt)) {
+                    exts.push_back(line);
+                }
+            }
+        }
+    }
+    return exts;
+}
+
+std::filesystem::path getDllPath(){
+    char path[MY_MAX_PATH];
+    HMODULE hm = NULL;
+
+    if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        (LPCSTR)&loadExList, &hm) == 0){
+        int ret = GetLastError();
+        //fprintf(stderr, "GetModuleHandle failed, error = %d\n", ret);
+        // Return or however you want to handle an error.
+        return "";
+    }
+    if (GetModuleFileName(hm, path, sizeof(path)) == 0){
+        int ret = GetLastError();
+        //fprintf(stderr, "GetModuleFileName failed, error = %d\n", ret);
+        // Return or however you want to handle an error.
+        return "";
+    }
+    //string_t rq = SAORI_FUNC::MultiByteToUnicode(path, CP_SJIS);
+    //std::string u8path = u8pathSAORI_FUNC::UnicodeToMultiByte(rq, SAORI_FUNC::StringtoCodePage("utf-8"));
+    return path;
+}
 
 bool loadex() {
 
