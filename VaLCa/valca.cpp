@@ -239,6 +239,19 @@ int vlcPlayer::getCommitting() {
 }
 
 void vlcPlayer::initialize() {
+    char buffer[MY_MAX_PATH];
+    GetModuleFileNameA(NULL, buffer, MY_MAX_PATH);
+    
+    //std::filesystem::path mpath = std::filesystem::u8path(buffer);
+    //mpath /= u8"VaLCa/";
+    PCWSTR x = L"F:\\ssp\\VaLCa";
+    //PCWSTR x = L"F:\\ssp\\VaLCa";
+    //string_t rq = SAORI_FUNC::MultiByteToUnicode(mpath.u8string(), SAORI_FUNC::StringtoCodePage("utf-8"));
+    //std::string sjbuf = SAORI_FUNC::UnicodeToMultiByte(rq, CP_SJIS);
+    //mpath.u8string().c_str()
+    SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+    AddDllDirectory(x);
+    //SetCurrentDirectoryW(x);
     std::vector<std::string> exList = {".mp3",".m4a",".wav",".ogg",".flac",".alac",".wma",".aac",".gsm",".au",".aif"};
     std::vector<std::string> exLoaded =loadExList();
     if (exLoaded.size() > 0) {

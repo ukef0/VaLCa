@@ -30,7 +30,10 @@
     <ClCompile Include="VaLCa\csaori.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="valca\valca.cpp">
+    <ClCompile Include="VaLCa\valcaClass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="VaLCa\vlcPlayer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -345,6 +348,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="valca\csaori.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VaLCa\vlcPlayer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

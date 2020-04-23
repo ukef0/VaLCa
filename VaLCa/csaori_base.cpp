@@ -1,5 +1,6 @@
 #include "pch.h"
 //setlocale//
+
 #ifdef _MSC_VER
 #if _MSC_VER >= 1400
 #pragma setlocale("japanese")
@@ -17,7 +18,8 @@
 #endif
 
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+//#include <delayimp.h>
+//#include <windows.h>
 
 #include <cstring>
 #include <cstdlib>
@@ -507,11 +509,28 @@ std::string CSAORIBase::checkAndModifyPath(const std::string &p)
 	fullpath += filepath;
 	return fullpath;
 }
+/*FARPROC WINAPI DliNotifyHook(unsigned dliNotify, PDelayLoadInfo pdli)
+{
+	switch (dliNotify) {
+	case dliNotePreLoadLibrary:
+		// master.dll のあるディレクトリにリダイレクト
+		TCHAR path[MAX_PATH];
+		::GetModuleFileName(g_hModule, path, _countof(path));
+		// C:\temp\master.dll を C:\temp\slave.dll に
+		LPTSTR ptr = ::_tcsrchr(path, _T('\\'));
+		ptr++;
+		::_tcscpy(ptr, _T("slave.dll"));
 
+		HMODULE hMod = ::LoadLibrary(path);
+		return (FARPROC)hMod;
+	}
+	return NULL;
+}*/
 //------------------------------------------------------------------------------
 //SAORI INTERFACES
 //------------------------------------------------------------------------------
 BOOL APIENTRY DllMain(
+
 	HANDLE hModule,
 	DWORD  ul_reason_for_call, 
 	LPVOID lpReserved
@@ -520,6 +539,7 @@ BOOL APIENTRY DllMain(
 	{
 	case DLL_PROCESS_ATTACH:
 		g_hModule = (HINSTANCE)hModule;
+		//__pfnDliNotifyHook2 = DliNotifyHook;
 		break;
 	case DLL_THREAD_ATTACH:
 		break;

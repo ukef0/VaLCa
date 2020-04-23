@@ -8,7 +8,7 @@
 #pragma once
 
 #include "csaori_base.h"
-
+#include "vlcPlayer.h"
 extern CSAORIBase* pSaori;
 
 class CSAORI : public CSAORIBase {
@@ -22,6 +22,7 @@ public:
 	virtual const string_t& s_saori_argument(void) const;
 	virtual const string_t& s_saori_value(void) const;
 	virtual const string_t& s_saori_result(void) const;
+	vlcPlayer vlc;
 
 	//ˆÈ‰º‚ªÀ‘•‚·‚×‚«ŠÖ”
 	virtual void exec(const CSAORIInput& in,CSAORIOutput& out);

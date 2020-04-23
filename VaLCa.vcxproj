@@ -121,7 +121,8 @@
     <ClCompile Include="valca\csaori_base.cpp" />
     <ClCompile Include="valca\csaori_util.cpp" />
     <ClCompile Include="valca\pch.cpp" />
-    <ClCompile Include="valca\valca.cpp" />
+    <ClCompile Include="VaLCa\valcaClass.cpp" />
+    <ClCompile Include="VaLCa\vlcPlayer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sdk\include\vlc\deprecated.h" />
@@ -228,6 +229,7 @@
     <ClInclude Include="valca\csaori_util.h" />
     <ClInclude Include="valca\framework.h" />
     <ClInclude Include="valca\pch.h" />
+    <ClInclude Include="VaLCa\vlcPlayer.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="sdk\activex\test.html" />

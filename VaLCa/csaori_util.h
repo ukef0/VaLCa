@@ -35,37 +35,37 @@ typedef enum {
 
 //global functions
 namespace SAORI_FUNC {
-	template<typename _Type> string_t numToString(_Type num){
+	template<typename _Type> string_t numToString(_Type num) {
 		char_t buf[32];
-		swprintf(buf,32,L"%d",num);
+		swprintf(buf, 32, L"%d", num);
 		return buf;
 	}
 	template<> string_t numToString<unsigned char>(unsigned char num);
 	template<> string_t numToString<unsigned int>(unsigned int num);
 	template<> string_t numToString<unsigned long>(unsigned long num);
 
-	string_t inline intToString(int num){return numToString(num);}
+	string_t inline intToString(int num) { return numToString(num); }
 
-	string_t::size_type  getLine(string_t &, const string_t &, string_t::size_type);
+	string_t::size_type  getLine(string_t&, const string_t&, string_t::size_type);
 	string_t getResultString(int);
 
-	string_t replaceAll(string_t string, const string_t &find, const string_t &replace);
-	std::string replaceAll(std::string string, const std::string &find, const std::string &replace);
+	string_t replaceAll(string_t string, const string_t& find, const string_t& replace);
+	std::string replaceAll(std::string string, const std::string& find, const std::string& replace);
 
-	std::string UnicodeToMultiByte(const wchar_t *Source, unsigned int CodePage=CP_OEMCP, DWORD Flags=0);
-	inline std::string UnicodeToMultiByte(const string_t& Source, unsigned int CodePage=CP_OEMCP, DWORD Flags=0) {
-		return UnicodeToMultiByte(Source.c_str(),CodePage,Flags);
+	std::string UnicodeToMultiByte(const wchar_t* Source, unsigned int CodePage = CP_OEMCP, DWORD Flags = 0);
+	inline std::string UnicodeToMultiByte(const string_t& Source, unsigned int CodePage = CP_OEMCP, DWORD Flags = 0) {
+		return UnicodeToMultiByte(Source.c_str(), CodePage, Flags);
 	}
 
-	string_t MultiByteToUnicode(const char *Source, unsigned int CodePage=CP_OEMCP, DWORD Flags=0);
-	inline string_t MultiByteToUnicode(const std::string& Source, unsigned int CodePage=CP_OEMCP, DWORD Flags=0) {
-		return MultiByteToUnicode(Source.c_str(),CodePage,Flags);
+	string_t MultiByteToUnicode(const char* Source, unsigned int CodePage = CP_OEMCP, DWORD Flags = 0);
+	inline string_t MultiByteToUnicode(const std::string& Source, unsigned int CodePage = CP_OEMCP, DWORD Flags = 0) {
+		return MultiByteToUnicode(Source.c_str(), CodePage, Flags);
 	}
 
 	string_t CodePagetoString(unsigned int cp);
-	unsigned int StringtoCodePage(const char *str);
+	unsigned int StringtoCodePage(const char* str);
 
-	void AsyncMessageBox(void *hwnd,char_t *message,char_t *title,unsigned int flags);
+	void AsyncMessageBox(void* hwnd, char_t* message, char_t* title, unsigned int flags);
 
 	//CriticalSection
 	class CCriticalSection {
@@ -83,14 +83,14 @@ namespace SAORI_FUNC {
 	//CriticalSection開放ラッパー
 	class CCriticalSectionLock {
 	private:
-		CCriticalSection &c;
+		CCriticalSection& c;
 	public:
-		CCriticalSectionLock(CCriticalSection &pc) : c(pc) {
+		CCriticalSectionLock(CCriticalSection& pc) : c(pc) {
 			c.Enter();
 		}
 		~CCriticalSectionLock() {
 			c.Leave();
 		}
 	};
-}
+};
 

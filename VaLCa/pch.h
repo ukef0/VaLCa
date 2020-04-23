@@ -13,5 +13,7 @@
 #include "csaori_base.h"
 #include "csaori_util.h"
 #include "cplugin.h"
+//#include "VaLCa_util.h"
+#include "vlcPlayer.h"
 
 #endif //PCH_H
