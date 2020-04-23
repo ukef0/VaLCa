@@ -50,6 +50,7 @@ private:
     libvlc_event_manager_t* eventManager;
     libvlc_playback_mode_t playbackMode;//---------ループ再生、リピート再生か、デフォルト再生か
     std::string errorMess;
+    long gHwnd;
 
 public:
     static void CallbackNextFunc(const libvlc_event_t* event,void* arg);
@@ -78,6 +79,8 @@ public:
     void randomToggle();
     void setPlaybackMode(libvlc_playback_mode_t x);
     libvlc_playback_mode_t getPlaybackMode();
+    void setHwnd(long x);
+    long getHwnd();
 
     void setMedia();
     bool getMediaDataWithPath(std::filesystem::path path, mediaData& mediaData);

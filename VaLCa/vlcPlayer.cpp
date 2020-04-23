@@ -29,16 +29,17 @@
     std::string mediaDataStr(mediaData mediaData);
     std::string myGetCurrentDirectry();
     std::vector< std::string > myMatch(std::string const& text, std::regex const& re);
-    std::string getHwnd(std::string fmo);
+    std::string getHwndFMOStr(std::string fmo);
+    long getHwndFMO();
     bool send_sstp(const std::string& str, void* hwnd);
     void sstpNotify(std::string event, std::vector<std::string> references);
     //void testsstp(std::vector<std::string> references);
-    void testsstp(std::string reference);
-    void OnVaLCaSSTP(std::string command);
-    void OnVaLCaPass();
-    void OnVaLCaTest();
-    void OnVaLCaLoop();
-    void OnVaLCaFinish();
+    void testsstp(std::string reference,long hwnd);
+    void OnVaLCaSSTP(std::string command,long hwnd);
+    void OnVaLCaPass(long hwnd);
+    void OnVaLCaTest(long hwnd);
+    void OnVaLCaLoop(long hwnd);
+    void OnVaLCaFinish(long hwnd);
     int idInStrings(std::string str, std::vector<std::string> list);
     bool filesInFolder(const char* input_path, std::vector<std::string>& fileNames, int mode);
     std::vector<std::string> loadExList();
@@ -146,6 +147,18 @@ libvlc_state_t vlcPlayer::getState() {
     mtxVLC_.unlock();
     return x;
 }
+void vlcPlayer::setHwnd(long x) {
+    mtxVLC_.lock();
+    gHwnd = x;
+    mtxVLC_.unlock();
+    
+}
+long vlcPlayer::getHwnd() {
+    mtxVLC_.lock();
+    long x = gHwnd;
+    mtxVLC_.unlock();
+    return x;
+}
 void DispStr(const char* name, const char* str) {
     if (str == NULL)
         printf("%s: NULL\n", name);
@@ -173,6 +186,7 @@ vlcPlayer::vlcPlayer() {
         exList = exLoaded;
     }
     //mtxVLC_.lock();
+    gHwnd = -1;
     errorMess = "";
     extensionMode = 1;
     extensionList = exList;
@@ -538,10 +552,13 @@ bool vlcPlayer::loadPath(std::filesystem::path path, int addFlug = 0) {
 int vlcPlayer::getVolume() {
     mtxVLC_.lock();
     libvlc_media_player_t* mediaPlayerD = libvlc_media_list_player_get_media_player(mediaListPlayer);
+    mtxVLC_.unlock();
     return libvlc_audio_get_volume(mediaPlayerD);
 }
 bool vlcPlayer::setVolume(int vol) {
+    mtxVLC_.lock();
     libvlc_media_player_t* mediaPlayerD = libvlc_media_list_player_get_media_player(mediaListPlayer);
+    mtxVLC_.unlock();
     return libvlc_audio_set_volume(mediaPlayerD, vol)==0;
 }
 std::string vlcPlayer::execute(std::vector<std::string>inputs) {
@@ -599,17 +616,21 @@ std::string vlcPlayer::execute(std::vector<std::string>inputs) {
         tSleep(1);
     }
     else if (inputs[0] == u8"setHwnd") {
-        tSleep(1);
+        setHwnd(stol(inputs[1]));
+        setCommitting(0);
+        return "OK";
     }
     else if (inputs[0] == u8"setVolume") {
         status = setVolume(stoi(inputs[1])) ? "OK" : "error:volumeout of range!";
         int volume = getVolume();
         std::string volStr = std::to_string(volume);
+        setCommitting(0);
         return status + "\n" + volStr;
     }
     else if (inputs[0] == u8"getVolume") {
         int volume=getVolume();
         std::string volStr=std::to_string(volume);
+        setCommitting(0);
         return volStr;
     }
     else if (inputs[0] == u8"extensionMode") {
@@ -618,6 +639,7 @@ std::string vlcPlayer::execute(std::vector<std::string>inputs) {
         else if (inputs[1] == u8"1")
             extensionMode = 1;
         else status = "error:input value incorrect!";
+        setCommitting(0);
         return status;
     }
     else if (inputs[0] == u8"information") {
@@ -627,6 +649,7 @@ std::string vlcPlayer::execute(std::vector<std::string>inputs) {
             mediaData mediaData = mediaDataList[i];
             output += mediaDataStr(mediaData) + u8"\n";
         }
+        setCommitting(0);
         return output;
     }
     else if (inputs[0] == u8"load") {
@@ -719,31 +742,33 @@ void vlcPlayer::nextFunc() {
     mtxVLC_.lock();
     int x = played;
     played = 1;
+    long hwnd = gHwnd;
     mtxVLC_.unlock();
     int mediaID = vlcPlayer::getNowPlayingMediaID();
     if (mode == libvlc_playback_mode_repeat) {
-        OnVaLCaSSTP(u8"OnVaLCaRepeat");
+        OnVaLCaSSTP(u8"OnVaLCaRepeat", hwnd);
     }
     else if (mediaID == 0) {
         if (x == 1)
-            OnVaLCaLoop();
-
+            OnVaLCaLoop(hwnd);
     }
     else {
-        OnVaLCaPass();
+        OnVaLCaPass(hwnd);
     }
+    //mtxVLC_.unlock();
 }
 void vlcPlayer::nextHundler(const libvlc_event_t* event) {
     //int* size = (int*)param;
-    std::thread nextThread(& vlcPlayer::nextFunc,this);
+    std::thread nextThread( &vlcPlayer::nextFunc,this);
     nextThread.detach();
     return;
 }
 void vlcPlayer::playedHundler(const libvlc_event_t* event) {
     mtxVLC_.lock();
     played = 0;
+    long x = gHwnd;
     mtxVLC_.unlock();
-    OnVaLCaFinish();
+    OnVaLCaFinish(x);
 }
 
 bool vlcPlayer::loadex() {
@@ -827,7 +852,42 @@ bool vlcPlayer::unloadex() {
 
         return result;
     }
-    std::string getHwnd(std::string fmo) {
+    long getHwndFMO() {
+        const int sharedMemSize = 1024 * 64;
+        HANDLE hFM = OpenFileMappingA(FILE_MAP_READ, FALSE, "Sakura");
+        BYTE* lpStr = new BYTE[sharedMemSize];
+        lpStr = (BYTE*)MapViewOfFile(hFM, FILE_MAP_READ, 0, 0, sharedMemSize);
+        long length;
+        memcpy(&length, lpStr, 4);
+        char* l = new char[sharedMemSize - 4];
+        memcpy(l, lpStr + 4, length - 4);
+        long hwndl;
+        if (hFM != NULL && lpStr != NULL) {
+            string_t rq = SAORI_FUNC::MultiByteToUnicode(l, CP_SJIS);
+            std::string u8LpStr = SAORI_FUNC::UnicodeToMultiByte(rq, SAORI_FUNC::StringtoCodePage("utf-8"));
+            std::string hwnd = getHwndFMOStr(u8LpStr);
+            std::regex rInt(R"(\d+)");
+            if (!std::regex_match(hwnd, rInt)) {
+                UnmapViewOfFile(lpStr);
+                CloseHandle(hFM);
+                delete[]l;
+                return -1;
+            }
+            char lenbuff[8];
+            sprintf_s(lenbuff, "%d", length);
+            std::string lenStr = (const char*)lenbuff;
+            UnmapViewOfFile(lpStr);
+            hwndl = stol(hwnd); 
+        }
+        else {
+            hwndl = -1;
+        }
+        CloseHandle(hFM);
+        delete[]l;
+        return hwndl;
+
+    }
+    std::string getHwndFMOStr(std::string fmo) {
         //std::string mPath = GetModulePath();
         //std::string mPath = myGetCurrentDirectry();
         std::filesystem::path mPath = getDllPath();
@@ -903,30 +963,13 @@ bool vlcPlayer::unloadex() {
             return false;
         }
     }
-    void sstpNotify(std::string event, std::vector<std::string> references) {
-        const int sharedMemSize = 1024 * 64;
-        HANDLE hFM = OpenFileMappingA(FILE_MAP_READ, FALSE, "Sakura");
-        BYTE* lpStr = new BYTE[sharedMemSize];
-        lpStr = (BYTE*)MapViewOfFile(hFM, FILE_MAP_READ, 0, 0, sharedMemSize);
-        long length;
-        memcpy(&length, lpStr, 4);
-        char* l = new char[sharedMemSize - 4];
-        memcpy(l, lpStr + 4, length - 4);
-        if (hFM != NULL && lpStr != NULL) {
-            string_t rq = SAORI_FUNC::MultiByteToUnicode(l, CP_SJIS);
-            std::string u8LpStr = SAORI_FUNC::UnicodeToMultiByte(rq, SAORI_FUNC::StringtoCodePage("utf-8"));
-            std::string hwnd = getHwnd(u8LpStr);
-            std::regex rInt(R"(\d+)");
-            if (!std::regex_match(hwnd, rInt)) {
-                UnmapViewOfFile(lpStr);
-                CloseHandle(hFM);
-                delete[]l;
-                return;
-            }
-            char lenbuff[8];
-            sprintf_s(lenbuff, "%d", length);
-            std::string lenStr = (const char*)lenbuff;
-            UnmapViewOfFile(lpStr);
+
+    void sstpNotify(std::string event, std::vector<std::string> references,long hwnd=-1) {
+        if (hwnd == -1) {
+            hwnd = getHwndFMO();
+        }
+            //==‚±‚±‚Ü‚Å
+        if(hwnd!=-1){
             std::string sstpStr = u8"";
             sstpStr += u8"NOTIFY SSTP/1.0\n";
             sstpStr += u8"Sender: VaLCa\n";
@@ -935,43 +978,39 @@ bool vlcPlayer::unloadex() {
                 sstpStr += u8"Reference" + std::to_string(i) + u8": " + references[i] + u8"\n";
             }
             sstpStr += u8"Charset: UTF-8\n\n";
-            long hwndl = stol(hwnd);
-            HWND hwndp = (HWND)(LONG_PTR)hwndl;
+            
+            HWND hwndp = (HWND)(LONG_PTR)hwnd;
             send_sstp(sstpStr, hwndp);
         }
-
-        CloseHandle(hFM);
-        delete[]l;
-
     }
     /*void testsstp(std::vector<std::string> ref) {
         tSleep(1000);
         sstpNotify("OnVaLCaTest", ref);
     }*/
-    void testsstp(std::string ref) {
+    void testsstp(std::string ref,long hwnd=-1) {
         std::vector<std::string>refs = { ref };
         tSleep(1000);
-        sstpNotify("OnVaLCaTest", refs);
+        sstpNotify("OnVaLCaTest", refs,hwnd);
     }
-    void OnVaLCaSSTP(std::string command) {
+    void OnVaLCaSSTP(std::string command,long hwnd=-1) {
         std::vector<std::string> references;
-        sstpNotify(command, references);
+        sstpNotify(command, references,hwnd);
     }
-    void OnVaLCaPass() {
+    void OnVaLCaPass(long hwnd=-1) {
         std::vector<std::string> references;
-        sstpNotify(u8"OnVaLCaPass", references);
+        sstpNotify(u8"OnVaLCaPass", references,hwnd);
     }
-    void OnVaLCaTest() {
+    void OnVaLCaTest(long hwnd=-1) {
         std::vector<std::string> references;
-        sstpNotify(u8"OnVaLCaTest", references);
+        sstpNotify(u8"OnVaLCaTest", references,hwnd);
     }
-    void OnVaLCaLoop() {
+    void OnVaLCaLoop(long hwnd=-1) {
         std::vector<std::string> references;
-        sstpNotify(u8"OnVaLCaLoop", references);
+        sstpNotify(u8"OnVaLCaLoop", references,hwnd);
     }
-    void OnVaLCaFinish() {
+    void OnVaLCaFinish(long hwnd=-1) {
         std::vector<std::string> references;
-        sstpNotify(u8"OnVaLCaFinish", references);
+        sstpNotify(u8"OnVaLCaFinish", references,hwnd);
     }
 
 
@@ -1155,7 +1194,7 @@ bool vlcPlayer::unloadex() {
         //fs::path path = u8"VaLCaConfig.txt";
         fs::path path = getDllPath();
         path.replace_filename(u8"VaLCaConfig.txt");
-        testsstp(path.u8string());
+        //testsstp(path.u8string());
         std::vector<std::string> exts;
         std::string line;
         std::regex reExt(R"(\.\w+)");
