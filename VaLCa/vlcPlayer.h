@@ -90,7 +90,8 @@ public:
     bool isPlaying();
     bool isEnded();
 
-
+    bool setVolume(int x);
+    int getVolume();
 
 
     void play();

@@ -535,6 +535,15 @@ bool vlcPlayer::loadPath(std::filesystem::path path, int addFlug = 0) {
 
     return true;
 }
+int vlcPlayer::getVolume() {
+    mtxVLC_.lock();
+    libvlc_media_player_t* mediaPlayerD = libvlc_media_list_player_get_media_player(mediaListPlayer);
+    return libvlc_audio_get_volume(mediaPlayerD);
+}
+bool vlcPlayer::setVolume(int vol) {
+    libvlc_media_player_t* mediaPlayerD = libvlc_media_list_player_get_media_player(mediaListPlayer);
+    return libvlc_audio_set_volume(mediaPlayerD, vol)==0;
+}
 std::string vlcPlayer::execute(std::vector<std::string>inputs) {
     //std::lock_guard<std::mutex> lock(mtx_);
     int i = 0;
@@ -588,6 +597,20 @@ std::string vlcPlayer::execute(std::vector<std::string>inputs) {
     }
     else if (inputs[0] == u8"now") {
         tSleep(1);
+    }
+    else if (inputs[0] == u8"setHwnd") {
+        tSleep(1);
+    }
+    else if (inputs[0] == u8"setVolume") {
+        status = setVolume(stoi(inputs[1])) ? "OK" : "error:volumeout of range!";
+        int volume = getVolume();
+        std::string volStr = std::to_string(volume);
+        return status + "\n" + volStr;
+    }
+    else if (inputs[0] == u8"getVolume") {
+        int volume=getVolume();
+        std::string volStr=std::to_string(volume);
+        return volStr;
     }
     else if (inputs[0] == u8"extensionMode") {
         if (inputs.size() < 1 || inputs[1] == u8"0")
@@ -806,7 +829,8 @@ bool vlcPlayer::unloadex() {
     }
     std::string getHwnd(std::string fmo) {
         //std::string mPath = GetModulePath();
-        std::string mPath = myGetCurrentDirectry();
+        //std::string mPath = myGetCurrentDirectry();
+        std::filesystem::path mPath = getDllPath();
         std::smatch m;
         std::regex r(R"([^\n\.]+\.ghostpath[^\n]+\n)");
         std::regex r2(R"(([^\n\.]+)\.ghostpath[^\n](\S+)[^\n]*\n)");
@@ -826,14 +850,20 @@ bool vlcPlayer::unloadex() {
         std::string gKey = "";
         std::string res = u8":\n";
         //std::regex rd = ;
-        std::filesystem::path mPathp = std::filesystem::u8path(mPath);
-        std::filesystem::path mPathG = mPathp.parent_path().parent_path();
-        for (unsigned int i = 0;i < gPathFmos.size();i++) {
-            std::filesystem::path gPathp = std::filesystem::u8path(gPathFmos[i][2]);
-            if (std::filesystem::equivalent(mPathG, gPathp)) {
-                gKey = gPathFmos[i][1];
+        //std::filesystem::path mPathp = std::filesystem::u8path(mPath);
+        //std::filesystem::path mPathG = mPathp.parent_path().parent_path();
+        std::filesystem::path mPathp = mPath.parent_path();
+        while (std::filesystem::equivalent(mPathp, mPath)) {
+            for (unsigned int i = 0;i < gPathFmos.size();i++) {
+                std::filesystem::path gPathp = std::filesystem::u8path(gPathFmos[i][2]);
+                if (std::filesystem::equivalent(mPathp, gPathp)) {
+                    gKey = gPathFmos[i][1];
+                }
             }
+            mPath = mPathp;
+            mPathp = mPathp.parent_path();
         }
+        
         fmo_cpy = fmo;
 
         while (std::regex_search(fmo_cpy, m, rhwnd)) {
