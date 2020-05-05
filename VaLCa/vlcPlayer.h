@@ -42,7 +42,7 @@ private:
     std::mutex mtxVLCflg_;
     libvlc_instance_t* instance;
     int randomMode;//------------1だと、再生リスト作成時に、ランダムソートをする。追加曲は追加部分のみランダムソート。
-    int flug;//------------------初期に1で、初回の楽曲再生で1になる。
+    int flug;//------------------初期に0で、初回の楽曲再生で1になる。
 
     libvlc_media_list_t* mediaList;//------vlc本体のプレイリスト
     libvlc_media_list_player_t* mediaListPlayer;

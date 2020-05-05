@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <future>
 #include <string>
-#include <fstream>
-#include <iostream>
+//#include <fstream>
+//#include <iostream>
 //typedef SSIZE_T ssize_t;
 #include <map>
 
@@ -22,8 +22,9 @@
 //using namespace VaLCaFunc;
 
 
-//
-
+//ƒeƒXƒg
+#include <iostream>
+#include <fstream>
 
 
     std::string mediaDataStr(mediaData mediaData);
@@ -44,9 +45,12 @@
     bool filesInFolder(const char* input_path, std::vector<std::string>& fileNames, int mode);
     std::vector<std::string> loadExList();
     std::filesystem::path getDllPath();
+    //void replaceOrUpdateDll(std::filesystem::path preDllPath, std::filesystem::path dllPath);
+    //bool replaceOrUpdateDirectory(std::filesystem::path preDllPath, std::filesystem::path dllPath);
     void tSleep(int x);
     std::string toStr(const char* str);
     int toInt(const char* str);
+    std::string myGetModulePath();
 
     std::string timeStr(libvlc_time_t time);
 
@@ -79,7 +83,13 @@ int vlcPlayer::getCommitting() {
     mtxVLCcommit_.unlock();
     return x;
 }
+std::string myGetModulePath() {
+    char buffer[MY_MAX_PATH];
+    GetModuleFileNameA(NULL, buffer, MY_MAX_PATH);
+    std::string res = buffer;
+    return res;
 
+}
 void vlcPlayer::initialize() {
     char buffer[MY_MAX_PATH];
     GetModuleFileNameA(NULL, buffer, MY_MAX_PATH);
@@ -165,6 +175,46 @@ void DispStr(const char* name, const char* str) {
     else
         printf("%s: %s\n", name, str);
 }
+/*void replaceOrUpdateDll(std::filesystem::path preDllPath, std::filesystem::path dllPath) {
+    namespace fs = std::filesystem;
+    if (fs::exists(preDllPath)&&fs::is_regular_file(preDllPath)) {
+        if (!fs::exists(dllPath))
+            fs::rename(preDllPath, dllPath);
+        else
+            fs::remove(preDllPath);
+    }else if (fs::exists(preDllPath)&&fs::is_directory(preDllPath)) {
+        replaceOrUpdateDirectory(preDllPath, dllPath);
+    }
+}
+bool replaceOrUpdateDirectory(std::filesystem::path preDllPath, std::filesystem::path dllPath) {
+    namespace fs = std::filesystem;
+    fs::directory_iterator iter(preDllPath), end;
+    //std::vector<std::string> fileNames;
+    std::error_code err;
+    for (; iter != end && !err; iter.increment(err)) {
+        const fs::directory_entry entry = *iter;
+        //path entryPath=entry.path();
+        std::string pathChar = entry.path().filename().u8string();
+        fs::path targetPath=dllPath/entry.path().filename();
+        if (pathChar[0] != u8'.') {
+            if (fs::is_directory(entry.path())) {
+                if (fs::is_directory(targetPath))
+                    replaceOrUpdateDirectory(entry.path(), targetPath);
+                else
+                    fs::rename(entry.path(), targetPath);
+            }
+            else if (fs::is_regular_file(entry.path())) {
+                replaceOrUpdateDll(entry.path(), targetPath);
+            }
+        }
+        //printf("%s\n", file_names.back().c_str());
+    }
+    if (err) {
+        //printf("errorCode:%s\nerrorMessage:5s",err.value(),err.message());
+        return false;
+    }
+    return true;
+}*/
 void vlcPlayer::setMedia() {
     mtxVLC_.lock();
     libvlc_media_list_release(mediaList);
@@ -180,6 +230,7 @@ void vlcPlayer::setMedia() {
 
 }
 vlcPlayer::vlcPlayer() {
+    namespace fs = std::filesystem;
     std::vector<std::string> exList = { ".mp3",".m4a",".wav",".ogg",".flac",".alac",".wma",".aac",".gsm",".au",".aif" };
     std::vector<std::string> exLoaded = loadExList();
     if (exLoaded.size() > 0) {
@@ -566,7 +617,6 @@ std::string vlcPlayer::execute(std::vector<std::string>inputs) {
     int i = 0;
     bool outputFlug = true;
     std::string status = "OK";
-
     while (getCommitting() == 1) {
         if (i > 300) {
             return "error:timeout\n";
